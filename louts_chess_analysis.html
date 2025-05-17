@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lotus Chess Analysis Demo</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <!-- Add jQuery dependency first - Chessboard.js requires it -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+
+        progress {
+            width: 100%;
+            height: 20px;
+            border-radius: 10px;
+            background-color: #eee;
+        }
+
+        progress::-webkit-progress-bar {
+            background-color: #eee;
+            border-radius: 10px;
+        }
+
+        progress::-webkit-progress-value {
+            background-color: #4CAF50;
+            border-radius: 10px;
+        }
+
+        progress::-moz-progress-bar {
+            background-color: #4CAF50;
+            border-radius: 10px;
+        }
+
+        .status {
+            margin: 10px 0;
+            padding: 12px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+
+        button {
+            background: #4CAF50;
+            border: none;
+            color: white;
+            padding: 12px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        button:disabled {
+            background: #cccccc;
+            transform: none;
+            box-shadow: none;
+        }
+
+        input {
+            padding: 12px;
+            width: 60%;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+        }
+
+        .results-container {
+            margin-top: 20px;
+        }
+
+        .games-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .game-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #fafafa;
+            transition: transform 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .game-header h3 {
+            margin: 0;
+            color: #2c3e50;
+        }
+
+        .game-header .game-info {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .move-list {
+            max-height: 600px;
+            overflow-y: auto;
+            margin-top: 20px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 10px;
+        }
+
+        .move-row {
+            display: grid;
+            grid-template-columns: 50px 1fr 1fr;
+            padding: 8px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .move-row:hover {
+            background-color: #f0f8ff;
+        }
+
+        .move-row.current {
+            background-color: #e0f7fa;
+        }
+
+        .move-number {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .move {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .move:hover {
+            background-color: #e0f7fa;
+        }
+
+        .move.best {
+            color: #2e7d32;
+            font-weight: 500;
+        }
+
+        .move.inaccuracy {
+            color: #ff9800;
+        }
+
+        .move.mistake {
+            color: #f44336;
+        }
+
+        .move.blunder {
+            color: #b71c1c;
+            font-weight: 500;
+        }
+
+        .board-container {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto 20px auto;
+        }
+
+        .analysis-panel {
+            display: grid;
+            grid-template-columns: minmax(400px, 1fr) minmax(300px, 2fr);
+            gap: 20px;
+        }
+
+        .move-analysis {
+            border: 1px solid #e0e0e0;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: white;
+        }
+
+        .move-analysis h4 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+            color: #2c3e50;
+        }
+
+        .best-moves-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .best-moves-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        .best-moves-list .move-notation {
+            font-weight: 500;
+        }
+
+        .best-moves-list .evaluation {
+            color: #666;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 15px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab.active {
+            border-bottom: 2px solid #4CAF50;
+            font-weight: 500;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .eval-bar {
+            width: 20px;
+            height: 400px;
+            background: linear-gradient(to bottom, #2196F3, #f5f5f5, #FF5722);
+            position: relative;
+            border-radius: 3px;
+            margin-right: 15px;
+        }
+
+        .eval-marker {
+            width: 100%;
+            height: 3px;
+            background-color: #000;
+            position: absolute;
+            left: 0;
+            transform: translateY(-50%);
+        }
+
+        .eval-value {
+            position: absolute;
+            right: -40px;
+            transform: translateY(-50%);
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+
+        .board-and-eval {
+            display: flex;
+            align-items: center;
+        }
+
+        .summary-section {
+            margin-top: 30px;
+            padding: 15px;
+            border-top: 2px solid #eee;
+            background-color: #fafafa;
+            border-radius: 8px;
+        }
+
+        .summary-section h4 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        
+        h3 {
+            color: #2c3e50;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        #debugInfo {
+            font-size: 0.8em;
+            color: #666;
+            background-color: #f8f9fa;
+            padding: 5px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @media (max-width: 768px) {
+            .analysis-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Lotus Chess Analysis</h1>
+        
+        <div>
+            <input type="text" id="username" placeholder="Enter Lichess username">
+            <button id="analyzeBtn">Analyze Games</button>
+        </div>
+
+        <div class="progress-container" style="display: none;">
+            <h3>Analysis Progress:</h3>
+            <progress id="progress" value="0" max="100"></progress>
+            <p id="progressText">0%</p>
+            <p id="statusMessage" class="status info">Waiting to start analysis...</p>
+            <p id="debugInfo" style="font-size: 0.8em; color: #666;"></p>
+        </div>
+
+        <div id="results" style="display: none;">
+            <h3>Analysis Results:</h3>
+            <div id="resultsJson"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            const usernameInput = document.getElementById('username');
+            const progressBar = document.getElementById('progress');
+            const progressText = document.getElementById('progressText');
+            const statusMessage = document.getElementById('statusMessage');
+            const progressContainer = document.querySelector('.progress-container');
+            const resultsContainer = document.getElementById('results');
+            const resultsJson = document.getElementById('resultsJson');
+            const debugInfo = document.getElementById('debugInfo');
+
+            let socket;
+            let currentJobId;
+            let completedJobs = new Set(); // Track completed jobs to prevent duplicates
+            let boardInstances = {}; // Store chess board instances
+            let games = []; // Store game data
+            let currentMoveIndex = {}; // Keep track of current move index per game
+            
+            // Debug function
+            function logDebug(message) {
+                console.log(message);
+                debugInfo.textContent = `${new Date().toISOString()}: ${message}`;
+            }
+
+            // Initialize Socket.IO connection
+            socket = io();
+            
+            // Socket.IO event handlers
+            socket.on('connect', () => {
+                logDebug('Connected to WebSocket server');
+                statusMessage.textContent = 'Connected to Lotus Chess Analysis Server';
+                statusMessage.className = 'status success';
+            });
+
+            socket.on('connection_established', (data) => {
+                logDebug('Connection established: ' + JSON.stringify(data));
+            });
+
+            socket.on('disconnect', () => {
+                logDebug('Disconnected from WebSocket server');
+                statusMessage.textContent = 'Disconnected from server';
+                statusMessage.className = 'status error';
+            });
+
+            socket.on('job_update', (data) => {
+                logDebug('Job update received: ' + JSON.stringify(data));
+                
+                // Update UI with job progress
+                if (data.job_id === currentJobId) {
+                    updateProgressUI(data);
+                    
+                    // If the job is completed and we haven't processed it yet
+                    if (data.status === 'completed' && !completedJobs.has(data.job_id)) {
+                        logDebug('Job completed, fetching results...');
+                        completedJobs.add(data.job_id); // Mark this job as completed
+                        getResults(currentJobId);
+                    }
+                }
+            });
+
+            socket.on('error', (error) => {
+                console.error('Socket.IO error:', error);
+                logDebug('Socket.IO error: ' + JSON.stringify(error));
+                statusMessage.textContent = `WebSocket Error: ${error.message || 'Unknown error'}`;
+                statusMessage.className = 'status error';
+            });
+
+            analyzeBtn.addEventListener('click', async () => {
+                const username = usernameInput.value.trim();
+                if (!username) {
+                    alert('Please enter a valid Lichess username');
+                    return;
+                }
+
+                // Reset UI
+                progressBar.value = 0;
+                progressText.textContent = '0%';
+                statusMessage.textContent = 'Starting analysis...';
+                statusMessage.className = 'status info';
+                progressContainer.style.display = 'block';
+                resultsContainer.style.display = 'none';
+                analyzeBtn.disabled = true;
+                completedJobs.clear(); // Clear the completed jobs set for new analysis
+
+                try {
+                    logDebug(`Starting analysis for username: ${username}`);
+                    
+                    // Start analysis via API
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Failed to start analysis');
+                    }
+
+                    const data = await response.json();
+                    currentJobId = data.job_id;
+                    
+                    logDebug(`Analysis started with job ID: ${currentJobId}`);
+                    
+                    // Subscribe to job updates via Socket.IO
+                    socket.emit('subscribe_to_job', { job_id: currentJobId });
+                    logDebug(`Subscribed to updates for job ID: ${currentJobId}`);
+                    
+                    // Update UI with initial status
+                    updateProgressUI({
+                        job_id: currentJobId,
+                        status: data.status,
+                        progress: data.progress || 0,
+                        message: data.message || 'Starting analysis...'
+                    });
+                    
+                    // If job is already completed (from cache), show results
+                    if (data.status === 'completed' && data.result) {
+                        logDebug('Job completed immediately (from cache)');
+                        completedJobs.add(currentJobId); // Mark job as completed
+                        displayResults(data);
+                    }
+                    
+                } catch (error) {
+                    logDebug(`Error: ${error.message}`);
+                    statusMessage.textContent = `Error: ${error.message}`;
+                    statusMessage.className = 'status error';
+                    analyzeBtn.disabled = false;
+                }
+            });
+
+            async function getResults(jobId) {
+                try {
+                    logDebug(`Fetching results for job ID: ${jobId}`);
+                    const response = await fetch(`/analysis/${jobId}`);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch results');
+                    }
+                    
+                    const result = await response.json();
+                    logDebug(`Results received: status=${result.status}, has result: ${!!result.result}`);
+                    
+                    if (result.status === 'completed' || result.status === 'SUCCESS') {
+                        displayResults(result);
+                    }
+                } catch (error) {
+                    logDebug(`Error fetching results: ${error.message}`);
+                    console.error('Error fetching results:', error);
+                }
+            }
+
+            function updateProgressUI(data) {
+                logDebug(`Updating UI: status=${data.status}, progress=${data.progress}`);
+                const progress = data.progress || 0;
+                progressBar.value = progress;
+                progressText.textContent = `${progress}%`;
+                
+                // Update status message
+                if (data.message) {
+                    statusMessage.textContent = data.message;
+                }
+                
+                // Update status class based on job status
+                if (data.status === 'completed') {
+                    statusMessage.className = 'status success';
+                    analyzeBtn.disabled = false;
+                } else if (data.status === 'failed') {
+                    statusMessage.className = 'status error';
+                    analyzeBtn.disabled = false;
+                } else {
+                    statusMessage.className = 'status info';
+                }
+            }
+
+            function displayResults(result) {
+                logDebug('Displaying results');
+                
+                progressBar.value = 100;
+                progressText.textContent = '100%';
+                statusMessage.textContent = 'Analysis completed successfully!';
+                statusMessage.className = 'status success';
+                analyzeBtn.disabled = false;
+
+                // Get the actual result data - handle different response formats
+                let resultData;
+                
+                if (result.result) {
+                    resultData = result.result;
+                } else if (result.status === 'SUCCESS' && result.result) {
+                    resultData = result.result;
+                } else {
+                    resultData = result;
+                }
+                
+                // Display results
+                resultsContainer.style.display = 'block';
+                
+                // Format the results in a nicer way
+                formatResults(resultData);
+            }
+            
+            function formatResults(data) {
+                if (!data || Object.keys(data).length === 0) {
+                    resultsJson.textContent = "No results available";
+                    return;
+                }
+                
+                // Clean up any previous game instances
+                Object.values(boardInstances).forEach(board => {
+                    if (board && typeof board.destroy === 'function') {
+                        board.destroy();
+                    }
+                });
+                boardInstances = {};
+                currentMoveIndex = {};
+                
+                // Store games data
+                games = data.games || [];
+                
+                // Create a more user-friendly display of the results
+                let html = '<div class="results-container">';
+                
+                // If we have games, display them
+                if (games && Array.isArray(games)) {
+                    html += `<h4>Analysis of ${games.length} games</h4>`;
+                    html += '<div class="games-list">';
+                    
+                    games.forEach((game, gameIndex) => {
+                        currentMoveIndex[gameIndex] = 0;
+                        
+                        html += `
+                            <div class="game-item" id="game-${gameIndex}">
+                                <div class="game-header">
+                                    <h3>Game ${gameIndex + 1}: ${game.game_id}</h3>
+                                    <div class="game-info">Time Control: ${game.time_control || 'Unknown'}</div>
+                                </div>
+                                
+                                <div class="tabs">
+                                    <div class="tab active" data-target="analysis-${gameIndex}">Analysis</div>
+                                    <div class="tab" data-target="moves-${gameIndex}">All Moves</div>
+                                </div>
+                                
+                                <div class="tab-content active" id="analysis-${gameIndex}">
+                                    <div class="analysis-panel">
+                                        <div class="board-and-eval">
+                                            <div class="eval-bar" id="eval-bar-${gameIndex}">
+                                                <div class="eval-marker" id="eval-marker-${gameIndex}" style="top: 50%">
+                                                    <span class="eval-value" id="eval-value-${gameIndex}">0.00</span>
+                                                </div>
+                                            </div>
+                                            <div class="board-container" id="board-${gameIndex}"></div>
+                                        </div>
+                                        <div class="move-analysis" id="move-analysis-${gameIndex}">
+                                            <h4>Position Analysis</h4>
+                                            <div class="position-details" id="position-details-${gameIndex}">
+                                                <p>Move: <span id="current-move-${gameIndex}">-</span></p>
+                                                <p>Evaluation: <span id="move-eval-${gameIndex}">0.00</span></p>
+                                            </div>
+                                            <h4>Best Moves</h4>
+                                            <ul class="best-moves-list" id="best-moves-${gameIndex}"></ul>
+                                            <div class="controls">
+                                                <button id="prev-move-${gameIndex}">Previous Move</button>
+                                                <button id="next-move-${gameIndex}">Next Move</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="tab-content" id="moves-${gameIndex}">
+                                    <div class="move-list" id="move-list-${gameIndex}">
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    
+                    // Add a summary section
+                    html += '<div class="summary-section">';
+                    html += `<h4>Analysis Summary</h4>`;
+                    html += `<p>Total analysis time: ${data.analysis_time ? data.analysis_time.toFixed(2) : 0} seconds</p>`;
+                    html += '</div>';
+                }
+                else {
+                    // Fallback to raw JSON
+                    html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                }
+                
+                html += '</div>';
+                resultsJson.innerHTML = html;
+                
+                // After HTML is inserted, initialize chess boards and event handlers
+                if (games && Array.isArray(games)) {
+                    games.forEach((game, gameIndex) => {
+                        initializeGameBoard(game, gameIndex);
+                        populateMoveList(game, gameIndex);
+                        setupNavigationHandlers(game, gameIndex);
+                        setupTabHandlers(gameIndex);
+                    });
+                }
+            }
+            
+            function initializeGameBoard(game, gameIndex) {
+                const boardElement = document.getElementById(`board-${gameIndex}`);
+                if (!boardElement) return;
+                
+                try {
+                    // Initialize the chessboard with pieces from a CDN
+                    boardInstances[gameIndex] = Chessboard(boardElement.id, {
+                        position: 'start',
+                        showNotation: true,
+                        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+                    });
+                    
+                    // Set initial position
+                    if (game.moves && game.moves.length > 0) {
+                        const initialFen = game.moves[0].fen || 'start'; // Fallback to start position if FEN is undefined
+                        boardInstances[gameIndex].position(initialFen);
+                        updateMoveAnalysis(game, gameIndex, 0);
+                    }
+                } catch (err) {
+                    console.error(`Error initializing board for game ${gameIndex}:`, err);
+                    // Display error message on the board container
+                    boardElement.innerHTML = `<div style="color: red; padding: 20px;">Error loading chessboard: ${err.message}</div>`;
+                }
+            }
+            
+            function populateMoveList(game, gameIndex) {
+                const moveListElement = document.getElementById(`move-list-${gameIndex}`);
+                if (!moveListElement || !game.moves) return;
+                
+                let moveListHtml = '';
+                let moveRows = [];
+                
+                // Group moves in pairs (white/black)
+                for (let i = 0; i < game.moves.length; i += 2) {
+                    const whiteMove = game.moves[i];
+                    const blackMove = i + 1 < game.moves.length ? game.moves[i + 1] : null;
+                    
+                    const moveNumber = Math.floor(i / 2) + 1;
+                    let rowHtml = `<div class="move-row" data-move-number="${moveNumber}">`;
+                    rowHtml += `<span class="move-number">${moveNumber}.</span>`;
+                    
+                    // White's move
+                    const whiteMoveClass = getMoveClass(whiteMove.played_move_eval);
+                    rowHtml += `<span class="move ${whiteMoveClass}" data-index="${i}" data-gameindex="${gameIndex}">${whiteMove.played_move}</span>`;
+                    
+                    // Black's move
+                    if (blackMove) {
+                        const blackMoveClass = getMoveClass(blackMove.played_move_eval);
+                        rowHtml += `<span class="move ${blackMoveClass}" data-index="${i+1}" data-gameindex="${gameIndex}">${blackMove.played_move}</span>`;
+                    } else {
+                        rowHtml += `<span></span>`;
+                    }
+                    
+                    rowHtml += `</div>`;
+                    moveRows.push(rowHtml);
+                }
+                
+                moveListElement.innerHTML = moveRows.join('');
+                
+                // Add click handlers to moves
+                moveListElement.querySelectorAll('.move').forEach(moveElem => {
+                    moveElem.addEventListener('click', function() {
+                        const index = parseInt(this.dataset.index);
+                        const gameIdx = parseInt(this.dataset.gameindex);
+                        goToMove(gameIdx, index);
+                    });
+                });
+            }
+            
+            function getMoveClass(evalValue) {
+                if (evalValue === 0) return ''; // No evaluation available
+                
+                // Determine move quality based on evaluation value
+                // For a chess engine, negative values are bad (for the side to move)
+                const evalAbs = Math.abs(evalValue);
+                
+                if (evalAbs >= 3) return 'blunder';
+                if (evalAbs >= 1.5) return 'mistake';
+                if (evalAbs >= 0.5) return 'inaccuracy';
+                if (evalAbs < 0.2) return 'best';
+                
+                return '';
+            }
+            
+            function updateMoveAnalysis(game, gameIndex, moveIndex) {
+                if (!game.moves || moveIndex >= game.moves.length) return;
+                
+                const move = game.moves[moveIndex];
+                const positionDetailsElem = document.getElementById(`position-details-${gameIndex}`);
+                const bestMovesElem = document.getElementById(`best-moves-${gameIndex}`);
+                const currentMoveElem = document.getElementById(`current-move-${gameIndex}`);
+                const moveEvalElem = document.getElementById(`move-eval-${gameIndex}`);
+                const evalMarkerElem = document.getElementById(`eval-marker-${gameIndex}`);
+                const evalValueElem = document.getElementById(`eval-value-${gameIndex}`);
+                
+                // Update current move display
+                const moveNumber = Math.floor(moveIndex / 2) + 1;
+                const moveSide = moveIndex % 2 === 0 ? 'White' : 'Black';
+                currentMoveElem.textContent = `${moveNumber}${moveIndex % 2 === 0 ? '.' : '...'} ${move.played_move} (${moveSide})`;
+                
+                // Update evaluation
+                const evalValue = move.played_move_eval !== undefined ? move.played_move_eval.toFixed(2) : 'N/A';
+                moveEvalElem.textContent = evalValue;
+                
+                // Update evaluation bar
+                if (move.played_move_eval !== undefined) {
+                    // Convert evaluation to percentage (for visual display)
+                    // Map the range from -5 to 5 to a percentage from 0% to 100%
+                    const evalPercent = Math.min(Math.max((5 - move.played_move_eval) * 10, 0), 100);
+                    evalMarkerElem.style.top = `${evalPercent}%`;
+                    evalValueElem.textContent = evalValue;
+                }
+                
+                // Update best moves list
+                let bestMovesHtml = '';
+                if (move.best_moves && move.best_moves.length > 0) {
+                    move.best_moves.forEach(bestMove => {
+                        const isBestPlayed = bestMove.move === move.played_move;
+                        bestMovesHtml += `
+                            <li ${isBestPlayed ? 'style="font-weight: bold; background-color: #e8f5e9;"' : ''}>
+                                <span class="move-notation">${bestMove.move}</span>
+                                <span class="evaluation">${bestMove.eval !== undefined ? bestMove.eval.toFixed(2) : 'N/A'}</span>
+                            </li>
+                        `;
+                    });
+                } else {
+                    bestMovesHtml = '<li>No best moves available</li>';
+                }
+                bestMovesElem.innerHTML = bestMovesHtml;
+                
+                // Highlight the current move in the move list
+                const moveListElem = document.getElementById(`move-list-${gameIndex}`);
+                if (moveListElem) {
+                    moveListElem.querySelectorAll('.move-row').forEach(row => {
+                        row.classList.remove('current');
+                    });
+                    
+                    moveListElem.querySelectorAll('.move').forEach(moveElem => {
+                        moveElem.classList.remove('current');
+                        if (parseInt(moveElem.dataset.index) === moveIndex) {
+                            moveElem.classList.add('current');
+                            moveElem.parentElement.classList.add('current');
+                            
+                            // Scroll to the current move
+                            moveElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    });
+                }
+            }
+            
+            function goToMove(gameIndex, moveIndex) {
+                const game = games[gameIndex];
+                if (!game || !game.moves || moveIndex < 0 || moveIndex >= game.moves.length) return;
+                
+                try {
+                    currentMoveIndex[gameIndex] = moveIndex;
+                    const fen = game.moves[moveIndex].fen;
+                    if (fen && boardInstances[gameIndex]) {
+                        boardInstances[gameIndex].position(fen);
+                    } else {
+                        console.warn(`Invalid FEN at move ${moveIndex} for game ${gameIndex} or board not initialized`);
+                    }
+                    updateMoveAnalysis(game, gameIndex, moveIndex);
+                } catch (err) {
+                    console.error(`Error setting position for game ${gameIndex} move ${moveIndex}:`, err);
+                }
+            }
+            
+            function setupNavigationHandlers(game, gameIndex) {
+                const prevBtn = document.getElementById(`prev-move-${gameIndex}`);
+                const nextBtn = document.getElementById(`next-move-${gameIndex}`);
+                
+                if (prevBtn) {
+                    prevBtn.addEventListener('click', function() {
+                        const currentIndex = currentMoveIndex[gameIndex];
+                        if (currentIndex > 0) {
+                            goToMove(gameIndex, currentIndex - 1);
+                        }
+                    });
+                }
+                
+                if (nextBtn) {
+                    nextBtn.addEventListener('click', function() {
+                        const currentIndex = currentMoveIndex[gameIndex];
+                        if (game.moves && currentIndex < game.moves.length - 1) {
+                            goToMove(gameIndex, currentIndex + 1);
+                        }
+                    });
+                }
+            }
+            
+            function setupTabHandlers(gameIndex) {
+                const tabsContainer = document.querySelector(`#game-${gameIndex} .tabs`);
+                if (!tabsContainer) return;
+                
+                tabsContainer.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', function() {
+                        // Remove active class from all tabs
+                        tabsContainer.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        
+                        // Add active class to clicked tab
+                        this.classList.add('active');
+                        
+                        // Hide all tab content
+                        const tabContents = document.querySelectorAll(`#game-${gameIndex} .tab-content`);
+                        tabContents.forEach(content => content.classList.remove('active'));
+                        
+                        // Show the associated content
+                        const targetId = this.dataset.target;
+                        const targetContent = document.getElementById(targetId);
+                        if (targetContent) {
+                            targetContent.classList.add('active');
+                            
+                            // If switching to analysis tab, make sure the board is rendered correctly
+                            if (targetId === `analysis-${gameIndex}` && boardInstances[gameIndex]) {
+                                boardInstances[gameIndex].resize();
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>

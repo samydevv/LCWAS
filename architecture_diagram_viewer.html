@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lotus Chess Analysis - Architecture Diagrams</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .diagram-container {
+            margin: 20px 0;
+        }
+        .description {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+            margin-bottom: 20px;
+        }
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .nav-button {
+            cursor: pointer;
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .nav-button:hover {
+            background-color: #45a049;
+        }
+        .section {
+            display: none;
+        }
+        .section.active {
+            display: block;
+        }
+        .mermaid {
+            text-align: center;
+        }
+        .section-nav {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        .section-button {
+            background-color: #f1f1f1;
+            border: none;
+            color: #333;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .section-button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Lotus Chess Analysis System</h1>
+        <p class="description">
+            This page visualizes the architecture and flow control of the Lotus Chess Analysis system.
+            The diagrams show the component interactions, data flow, and system structure.
+        </p>
+        
+        <div class="section-nav">
+            <button class="section-button active" data-section="system-architecture">System Architecture</button>
+            <button class="section-button" data-section="data-flow">Data Flow</button>
+            <button class="section-button" data-section="component-structure">Component Structure</button>
+            <button class="section-button" data-section="flow-explanation">Flow Explanation</button>
+        </div>
+
+        <div id="system-architecture" class="section active">
+            <h2>System Architecture Diagram</h2>
+            <div class="diagram-container">
+                <pre class="mermaid">
+graph TB
+    subgraph "User Interface"
+        UI[Web UI] --> Client
+        Client[Client Browser] -- WebSocket --> SIO
+    end
+
+    subgraph "FastAPI Server"
+        API[FastAPI Application] -- REST API --> Tasks
+        SIO[Socket.IO Integration] -- Realtime Updates --> Client
+        Tasks[Task Manager] --> Celery
+    end
+
+    subgraph "Task Queue System"
+        Celery[Celery Task Queue] --> Worker
+        Worker[Celery Worker] --> Analysis
+        Analysis[Analysis Service] --> StockfishPool
+        StockfishPool[Stockfish Engine Pool] --> Cache
+    end
+
+    subgraph "External Services"
+        Analysis --> Lichess[Lichess API]
+    end
+
+    subgraph "Storage"
+        Cache[Cache Service] --> Redis
+        Redis[(Redis Cache)]
+    end
+
+    Client -- HTTP Request --> API
+    API -- API Response --> Client
+    Worker -- Status Updates --> SIO
+                </pre>
+            </div>
+            <div class="description">
+                <p>The System Architecture Diagram shows how the different components of the system interact with each other:</p>
+                <ul>
+                    <li><strong>User Interface</strong>: Web UI in the client browser communicating with the server</li>
+                    <li><strong>FastAPI Server</strong>: Handles API requests and WebSocket connections</li>
+                    <li><strong>Task Queue</strong>: Celery for managing background analysis tasks</li>
+                    <li><strong>External Services</strong>: Lichess API for fetching game data</li>
+                    <li><strong>Storage</strong>: Redis cache for storing analysis results</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="data-flow" class="section">
+            <h2>Data Flow Diagram</h2>
+            <div class="diagram-container">
+                <pre class="mermaid">
+sequenceDiagram
+    participant User as User
+    participant UI as Web UI
+    participant API as FastAPI Server
+    participant Celery as Celery Queue
+    participant Worker as Celery Worker
+    participant Cache as Cache Service
+    participant Lichess as Lichess API
+    participant SF as Stockfish Engine
+    
+    User->>UI: Enter Lichess username
+    UI->>API: POST /analyze {username}
+    API->>Celery: Submit analysis task
+    API-->>UI: Return job_id
+    UI->>API: Connect WebSocket with job_id
+    
+    Worker->>Lichess: Fetch recent games
+    Lichess-->>Worker: Return game data
+    
+    loop For each game
+        Worker->>Cache: Check if analysis exists
+        alt Analysis exists in cache
+            Cache-->>Worker: Return cached analysis
+        else Cache miss
+            loop For each position
+                Worker->>Cache: Check if position exists
+                alt Position exists in cache
+                    Cache-->>Worker: Return cached evaluation
+                else Cache miss
+                    Worker->>SF: Analyze position
+                    SF-->>Worker: Return evaluation
+                    Worker->>Cache: Store position & eval
+                end
+            end
+        end
+        Worker->>API: Update progress via WebSocket
+        API->>UI: Send progress update
+    end
+
+    Worker->>Cache: Store complete analysis
+    Worker->>API: Send complete results
+    API->>UI: Send completion update
+    UI->>User: Display detailed analysis
+                </pre>
+            </div>
+            <div class="description">
+                <p>The Data Flow Diagram illustrates the step-by-step process of chess game analysis:</p>
+                <ul>
+                    <li>User requests analysis by entering a Lichess username</li>
+                    <li>Server creates a background task and returns a job ID</li>
+                    <li>Client establishes WebSocket connection for real-time updates</li>
+                    <li>Worker fetches games, checks cache, and processes analysis</li>
+                    <li>Results are delivered back to the client via WebSocket</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="component-structure" class="section">
+            <h2>Component Structure</h2>
+            <div class="diagram-container">
+                <pre class="mermaid">
+classDiagram
+    class Main {
+        +app: FastAPI
+        +setup_socketio()
+        +setup_routes()
+    }
+
+    class AnalysisService {
+        +analyze_user_games(username)
+        +analyze_position(fen)
+        +get_best_moves(position)
+    }
+
+    class LichessService {
+        +get_user_games(username)
+        +parse_pgn(pgn)
+    }
+
+    class CacheService {
+        +get(key)
+        +set(key, value)
+        +position_exists(fen)
+        +get_position_eval(fen)
+    }
+
+    class Tasks {
+        +analyze_games_task(username)
+        +update_progress(job_id, progress)
+    }
+
+    class StockfishEngine {
+        +analyze(fen, depth)
+        +get_evaluation()
+        +get_best_move()
+    }
+
+    class Models {
+        +GameAnalysis
+        +MoveAnalysis
+        +BestMove
+    }
+
+    Main --> AnalysisService
+    Main --> Tasks
+    AnalysisService --> LichessService
+    AnalysisService --> CacheService
+    AnalysisService --> StockfishEngine
+    Tasks --> AnalysisService
+    AnalysisService --> Models
+                </pre>
+            </div>
+            <div class="description">
+                <p>The Component Structure Diagram shows the relationships between the main classes and modules:</p>
+                <ul>
+                    <li><strong>Main</strong>: Entry point with FastAPI app setup</li>
+                    <li><strong>AnalysisService</strong>: Core business logic for chess analysis</li>
+                    <li><strong>LichessService</strong>: Handles interaction with Lichess API</li>
+                    <li><strong>CacheService</strong>: Manages the caching system</li>
+                    <li><strong>Tasks</strong>: Celery task definitions</li>
+                    <li><strong>StockfishEngine</strong>: Interface to the Stockfish chess engine</li>
+                    <li><strong>Models</strong>: Data structures for analysis results</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="flow-explanation" class="section">
+            <h2>Flow Control Explanation</h2>
+            
+            <h3>1. Client Request Flow</h3>
+            <ol>
+                <li>User enters a Lichess username in the web UI</li>
+                <li>Client sends an HTTP POST request to <code>/analyze</code> endpoint</li>
+                <li>FastAPI server validates the request and creates a Celery task</li>
+                <li>Server returns a job ID to the client</li>
+                <li>Client establishes a WebSocket connection to receive real-time updates</li>
+            </ol>
+
+            <h3>2. Background Processing Flow</h3>
+            <ol>
+                <li>Celery worker picks up the analysis task</li>
+                <li>Worker uses LichessService to fetch the user's recent games</li>
+                <li>For each game:
+                    <ul>
+                        <li>Check if full game analysis exists in cache</li>
+                        <li>If not, process each position in the game</li>
+                        <li>For each position:
+                            <ul>
+                                <li>Check position cache</li>
+                                <li>If position is not cached, analyze with Stockfish</li>
+                                <li>Store position evaluation in cache</li>
+                            </ul>
+                        </li>
+                        <li>Send progress updates through WebSocket</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h3>3. Caching System Flow</h3>
+            <ol>
+                <li>Two-tiered caching system:
+                    <ul>
+                        <li>Redis for persistent storage of complete analyses</li>
+                        <li>In-memory cache for position evaluations during analysis</li>
+                    </ul>
+                </li>
+                <li>Cache keys:
+                    <ul>
+                        <li>Complete analyses: <code>username:timestamp</code></li>
+                        <li>Positions: <code>fen_string</code></li>
+                    </ul>
+                </li>
+                <li>Cache fallbacks:
+                    <ul>
+                        <li>If Redis is unavailable, use in-memory only</li>
+                        <li>If position is not cached, perform full analysis</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h3>4. Result Delivery Flow</h3>
+            <ol>
+                <li>When analysis is complete, worker stores full results in Redis</li>
+                <li>Final results are sent to the client via WebSocket</li>
+                <li>UI renders the analysis with interactive chess board visualization</li>
+                <li>User can navigate through the games and positions</li>
+            </ol>
+
+            <h3>Module Relationships</h3>
+            <ul>
+                <li><strong>app/main.py</strong>: Entry point, FastAPI setup, route definitions</li>
+                <li><strong>app/tasks.py</strong>: Celery task definitions, background processing</li>
+                <li><strong>app/config.py</strong>: System configuration, environment variables</li>
+                <li><strong>app/models/analysis.py</strong>: Data models for game analysis</li>
+                <li><strong>app/services/analysis_service.py</strong>: Core analysis business logic</li>
+                <li><strong>app/services/lichess_service.py</strong>: Integration with Lichess API</li>
+                <li><strong>app/services/cache_service.py</strong>: Caching system implementation</li>
+                <li><strong>client_example.html</strong>: Web user interface with interactive board</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+        
+        // Handle section navigation
+        document.addEventListener('DOMContentLoaded', function() {
+            const sectionButtons = document.querySelectorAll('.section-button');
+            const sections = document.querySelectorAll('.section');
+            
+            sectionButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const targetSection = this.getAttribute('data-section');
+                    
+                    // Hide all sections and deactivate all buttons
+                    sections.forEach(section => section.classList.remove('active'));
+                    sectionButtons.forEach(btn => btn.classList.remove('active'));
+                    
+                    // Show the target section and activate the clicked button
+                    document.getElementById(targetSection).classList.add('active');
+                    this.classList.add('active');
+                    
+                    // Refresh mermaid diagrams
+                    setTimeout(() => {
+                        mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+                    }, 0);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
