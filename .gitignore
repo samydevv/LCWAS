@@ -1,0 +1,23 @@
+# Ignore Stockfish directory and all its contents
+stockfish/
+app/stockfish/
+
+# Ignore virtual environment
+venv/
+
+# Ignore Python cache files
+__pycache__/
+*/__pycache__/
+*/**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Ignore log files
+*.log
+
+# Ignore Redis database
+*.rdb
+
+# Ignore environment variables file
+.env
