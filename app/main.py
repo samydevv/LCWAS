@@ -33,7 +33,7 @@ from app.config import API_HOST, API_PORT, REDIS_URL
 from app.tasks import celery_app, analyze_games_task
 
 # Configure loguru logger
-log_path = Path(__file__).parent.parent / "lotus_chess.log"
+log_path = Path(__file__).parent.parent / "logs/lotus_chess.log"
 config = {
     "handlers": [
         {"sink": sys.stdout, "level": "DEBUG", "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"},
