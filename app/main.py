@@ -2,12 +2,13 @@
 Lotus Chess Web API - FastAPI application with caching, parallelization, 
 WebSockets for progress updates, and Celery task queue integration.
 """
-import logging
 import asyncio
 import time
 import json
 import uuid
 import threading
+import sys
+from loguru import logger
 from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -31,16 +32,19 @@ from app.models.analysis import AnalysisRequest, AnalysisResponse, AnalysisJobSt
 from app.config import API_HOST, API_PORT, REDIS_URL
 from app.tasks import celery_app, analyze_games_task
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(Path(__file__).parent.parent / "lotus_chess.log")
+# Configure loguru logger
+log_path = Path(__file__).parent.parent / "lotus_chess.log"
+config = {
+    "handlers": [
+        {"sink": sys.stdout, "level": "DEBUG", "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"},
+        {"sink": log_path, "level": "DEBUG", "rotation": "10 MB", "retention": "1 week", "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"}
     ]
-)
-logger = logging.getLogger(__name__)
+}
+
+# Remove default handler and configure with our settings
+logger.remove()
+for handler in config["handlers"]:
+    logger.add(**handler)
 
 # Initialize FastAPI app
 app = FastAPI(
