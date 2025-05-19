@@ -13,8 +13,10 @@ __pycache__/
 *$py.class
 .pytest_cache/
 
-# Ignore log files
+# Ignore all log files wherever they are
 *.log
+logs/
+lotus_chess.log
 
 # Ignore Redis database
 *.rdb
